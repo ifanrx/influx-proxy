@@ -48,6 +48,8 @@ type HttpBackend struct {
 	Active    bool
 	running   bool
 	WriteOnly int
+	DBUser    string
+	DBPasswd  string
 }
 
 func NewHttpBackend(cfg *BackendConfig) (hb *HttpBackend) {
@@ -66,6 +68,8 @@ func NewHttpBackend(cfg *BackendConfig) (hb *HttpBackend) {
 		Active:    true,
 		running:   true,
 		WriteOnly: cfg.WriteOnly,
+		DBUser:    cfg.DBUser,
+		DBPasswd:  cfg.DBPasswd,
 	}
 	go hb.CheckActive()
 	return
@@ -192,6 +196,10 @@ func (hb *HttpBackend) WriteStream(stream io.Reader, compressed bool) (err error
 	req, err := http.NewRequest("POST", hb.URL+"/write?"+q.Encode(), stream)
 	if compressed {
 		req.Header.Add("Content-Encoding", "gzip")
+	}
+
+	if hb.DBUser != "" {
+		req.SetBasicAuth(hb.DBUser, hb.DBPasswd)
 	}
 
 	resp, err := hb.client.Do(req)

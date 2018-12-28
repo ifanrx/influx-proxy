@@ -72,6 +72,8 @@ type BackendConfig struct {
 	CheckInterval   int
 	RewriteInterval int
 	WriteOnly       int
+	DBUser          string
+	DBPasswd        string
 }
 
 type RedisConfigSource struct {
