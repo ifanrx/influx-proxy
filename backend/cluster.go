@@ -322,7 +322,7 @@ func (ic *InfluxCluster) CheckQuery(q string) (err error) {
 				return
 			}
 		}
-		return ErrQueryForbidden
+		return
 	}
 
 	return
