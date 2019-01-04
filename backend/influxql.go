@@ -136,7 +136,8 @@ func GetMeasurementFromInfluxQL(q string) (m string, err error) {
 		}
 	}
 
-	return "", ErrIllegalQL
+	m = "_default"
+	return
 }
 
 func getMeasurement(tokens []string) (m string) {
