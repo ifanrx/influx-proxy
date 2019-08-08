@@ -12,7 +12,25 @@ import (
 	"net/http/pprof"
 	"strings"
 
-	"github.com/ifanrx/influx-proxy/backend"
+	"../backend"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+var (
+	pingProcessed = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "influxproxy_ping_total",
+		Help: "The total number of pings",
+	})
+	pingErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "influxproxy_ping_errors_total",
+		Help: "The total number of ping errors",
+	})
+	queryProcessed = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "influxproxy_query_total",
+		Help: "The total number of queries",
+	})
 )
 
 type HttpService struct {
@@ -38,6 +56,7 @@ func (hs *HttpService) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/write", hs.HandlerWrite)
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	http.Handle("/metrics", promhttp.Handler())
 }
 
 func (hs *HttpService) HandlerReload(w http.ResponseWriter, req *http.Request) {
@@ -59,9 +78,11 @@ func (hs *HttpService) HandlerPing(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 	version, err := hs.ic.Ping()
 	if err != nil {
+		pingErrors.Inc()
 		panic("WTF")
 		return
 	}
+	pingProcessed.Inc()
 	w.Header().Add("X-Influxdb-Version", version)
 	w.WriteHeader(204)
 	return
@@ -70,6 +91,7 @@ func (hs *HttpService) HandlerPing(w http.ResponseWriter, req *http.Request) {
 func (hs *HttpService) HandlerQuery(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 	w.Header().Add("X-Influxdb-Version", backend.VERSION)
+	queryProcessed.Inc()
 
 	db := req.FormValue("db")
 	if hs.db != "" {
