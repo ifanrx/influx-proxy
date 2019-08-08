@@ -31,6 +31,18 @@ var (
 		Name: "influxproxy_query_total",
 		Help: "The total number of queries",
 	})
+	queryErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "influxproxy_query_errors_total",
+		Help: "The total number of querie errors",
+	})
+	writeProcessed = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "influxproxy_write_total",
+		Help: "The total number of writes",
+	})
+	writeErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "influxproxy_write_errors_total",
+		Help: "The total number of write errors",
+	})
 )
 
 type HttpService struct {
@@ -56,7 +68,7 @@ func (hs *HttpService) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/write", hs.HandlerWrite)
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	http.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", promhttp.Handler())
 }
 
 func (hs *HttpService) HandlerReload(w http.ResponseWriter, req *http.Request) {
@@ -105,6 +117,7 @@ func (hs *HttpService) HandlerQuery(w http.ResponseWriter, req *http.Request) {
 	q := strings.TrimSpace(req.FormValue("q"))
 	err := hs.ic.Query(w, req)
 	if err != nil {
+		queryErrors.Inc()
 		log.Printf("query error: %s,the query is %s,the client is %s\n", err, q, req.RemoteAddr)
 		return
 	}
@@ -118,10 +131,12 @@ func (hs *HttpService) HandlerQuery(w http.ResponseWriter, req *http.Request) {
 func (hs *HttpService) HandlerWrite(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 	w.Header().Add("X-Influxdb-Version", backend.VERSION)
+	writeProcessed.Inc()
 
 	if req.Method != "POST" {
 		w.WriteHeader(405)
 		w.Write([]byte("method not allow."))
+		writeErrors.Inc()
 		return
 	}
 
@@ -129,6 +144,7 @@ func (hs *HttpService) HandlerWrite(w http.ResponseWriter, req *http.Request) {
 
 	if hs.db != "" {
 		if db != hs.db {
+			writeErrors.Inc()
 			w.WriteHeader(404)
 			w.Write([]byte("database not exist."))
 			return
@@ -139,6 +155,7 @@ func (hs *HttpService) HandlerWrite(w http.ResponseWriter, req *http.Request) {
 	if req.Header.Get("Content-Encoding") == "gzip" {
 		b, err := gzip.NewReader(req.Body)
 		if err != nil {
+			writeErrors.Inc()
 			w.WriteHeader(400)
 			w.Write([]byte("unable to decode gzip body"))
 			return
@@ -149,6 +166,7 @@ func (hs *HttpService) HandlerWrite(w http.ResponseWriter, req *http.Request) {
 
 	p, err := ioutil.ReadAll(body)
 	if err != nil {
+		writeErrors.Inc()
 		w.WriteHeader(400)
 		w.Write([]byte(err.Error()))
 		return
